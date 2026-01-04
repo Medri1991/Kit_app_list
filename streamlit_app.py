@@ -1,151 +1,75 @@
 import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import plotly.express as px
+from datetime import datetime
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+st.set_page_config(page_title="עגלה חכמה - ניתוח תקציב", page_icon="📊", layout="wide")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# --- 1. הגדרת תקציב יעד (פיצ'ר חדש) ---
+st.sidebar.header("⚙️ הגדרות תקציב")
+budget_limit = st.sidebar.number_input("הגדר תקציב חודשי מקסימלי (₪):", value=2500, step=100)
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+# --- 2. סימולציית נתונים (כדי שיהיה מה לראות בגרף בהתחלה) ---
+if 'monthly_history' not in st.session_state:
+    st.session_state.monthly_history = [
+        {"date": "2024-05-01", "total": 450, "items_count": 22},
+        {"date": "2024-05-08", "total": 620, "items_count": 30},
+        {"date": "2024-05-15", "total": 310, "items_count": 15},
+        {"date": "2024-05-22", "total": 580, "items_count": 25}
+    ]
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+# --- 3. ממשק הטאבים ---
+tab1, tab2 = st.tabs(["🛒 ניהול קניות", "📊 מנתח תקציב חזותי"])
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+with tab1:
+    st.info("כאן נמצאים כלי ניהול הרשימה (כפי שבנינו בשלב הקודם).")
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+with tab2:
+    st.header("📊 ניתוח הוצאות חודשי")
+    
+    if st.session_state.monthly_history:
+        df = pd.DataFrame(st.session_state.monthly_history)
+        df['date'] = pd.to_datetime(df['date'])
+        total_spent = df['total'].sum()
+        
+        # תצוגת מטרים (Metrics)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("סה\"כ הוצאה", f"{total_spent:,.2f} ₪")
+        
+        remaining = budget_limit - total_spent
+        color = "normal" if remaining > 0 else "inverse"
+        c2.metric("יתרה לתקציב", f"{remaining:,.2f} ₪", delta_color=color)
+        
+        avg_purchase = df['total'].mean()
+        c3.metric("ממוצע לקנייה", f"{avg_purchase:.2f} ₪")
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+        st.divider()
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+        # גרף 1: הוצאות לאורך זמן (Line Chart)
+        st.subheader("📈 קצב ההוצאות לאורך החודש")
+        fig_line = px.line(df, x='date', y='total', markers=True, 
+                          labels={'total': 'סכום הקנייה (₪)', 'date': 'תאריך'},
+                          title="הוצאות לפי תאריך")
+        fig_line.update_traces(line_color='#4CAF50')
+        st.plotly_chart(fig_line, use_container_width=True)
 
-    return gdp_df
+        # גרף 2: מדד ניצול תקציב (Gauge/Donut Chart)
+        st.subheader("🎯 ניצול תקציב חודשי")
+        usage_pct = min((total_spent / budget_limit) * 100, 100)
+        
+        # יצירת גרף עוגה שמראה ניצול מול יתרה
+        budget_df = pd.DataFrame({
+            "קטגוריה": ["נוצל", "נותר"],
+            "סכום": [total_spent, max(0, remaining)]
+        })
+        fig_donut = px.pie(budget_df, values='סכום', names='קטגוריה', hole=0.6,
+                          color_discrete_map={'נוצל': '#ef5350', 'נותר': '#81c784'})
+        st.plotly_chart(fig_donut)
 
-gdp_df = get_gdp_data()
+        if total_spent > budget_limit:
+            st.error(f"⚠️ חרגת מהתקציב ב-{abs(remaining):,.2f} ₪!")
+        elif total_spent > budget_limit * 0.8:
+            st.warning("⚡ שים לב: ניצלת מעל 80% מהתקציב החודשי.")
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+    else:
+        st.write("אין עדיין נתונים להצגת גרפים.")
