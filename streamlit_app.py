@@ -1,146 +1,112 @@
 import streamlit as st
-import urllib.parse # לייצוג נתונים לכתובות URL
+import urllib.parse
 
-st.set_page_config(page_title="Pantry Planner & Share", page_icon="📸", layout="wide")
+st.set_page_config(page_title="Pantry Chef Pro", page_icon="👨‍🍳", layout="wide")
 
-# --- 1. מאגר נתונים (מצרכים, מחירים, מתכונים עם תמונות) ---
-ingredients_market = {
-    "ירקות ופירות 🍅": {"עגבניות": 6, "מלפפונים": 5, "בצל": 5, "שום": 12, "תפוחי אדמה": 6, "גזר": 5, "לימון": 8},
-    "בשר ודגים 🥩": {"חזה עוף": 35, "בשר טחון": 50, "פילה סלמון": 90, "טונה בשמן": 6, "אמנון": 35},
-    "חלב וביצים 🧀": {"ביצים": 13, "חלב": 7, "חמאה": 8, "גבינה צהובה": 15, "שמנת מתוקה": 7, "פרמזן": 25},
-    "מזווה 🥫": {"אורז": 9, "פסטה": 6, "קמח": 5, "סוכר": 4, "שמן זית": 45, "רסק עגבניות": 3, "קרם קוקוס": 10},
-    "פרימיום ✨": {"שמן כמהין": 60, "יין לבן": 40, "צנוברים": 25, "אגוזי מלך": 15, "שוקולד מריר": 10}
+# --- 1. מאגר מוצרים ענק (כמו בסופר) ---
+# הוספתי ערך קלורי משוער לכל 100 גרם או יחידה
+ingredients_db = {
+    "ירקות ופירות 🍅": {
+        "עגבניות": 18, "מלפפונים": 15, "בצל": 40, "שום": 149, "תפוחי אדמה": 77, "גזר": 41, 
+        "לימון": 29, "פטרוזיליה": 36, "חסה": 15, "תפוח": 52, "בננה": 89, "גמבה": 31, "קישוא": 17
+    },
+    "קצביה ודגים 🥩": {
+        "חזה עוף": 165, "בשר טחון": 250, "פילה סלמון": 208, "טונה בשמן": 190, "אמנון": 128, 
+        "נקניקיות": 300, "כרעי עוף": 220, "פילה בקר": 250
+    },
+    "מוצרי חלב וביצים 🧀": {
+        "ביצים": 155, "חלב": 60, "חמאה": 717, "גבינה צהובה": 350, "שמנת מתוקה": 340, 
+        "פרמזן": 431, "גבינה לבנה": 98, "יוגורט": 60, "קוטג'": 98
+    },
+    "מזווה ויבש 🥫": {
+        "אורז": 130, "פסטה": 131, "קמח": 364, "סוכר": 387, "שמן זית": 884, "רסק עגבניות": 82, 
+        "קרם קוקוס": 230, "גרגירי חומוס": 164, "פירורי לחם": 395, "עדשים": 116, "קוסקוס": 112
+    },
+    "תבלינים ורטבים 🧂": {
+        "מלח": 0, "פלפל שחור": 250, "פפריקה": 280, "כמון": 370, "קטשופ": 112, "מיונז": 680, "חרדל": 66, "סילאן": 280
+    }
 }
 
+# --- 2. ספר המתכונים (עם ערך קלורי למנה) ---
 recipes = [
-    {"שם": "פסטה בולונז", "חובה": ["פסטה", "בשר טחון", "בצל", "רסק עגבניות"], "image": "https://images.unsplash.com/photo-1546545229-ef2797686523?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"},
-    {"שם": "סלמון בתנור", "חובה": ["פילה סלמון", "לימון", "שום"], "image": "https://images.unsplash.com/photo-1599026330089-0ed5c083697e?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"},
-    {"שם": "אורז קוקוס ועוף", "חובה": ["אורז", "חזה עוף", "קרם קוקוס"], "image": "https://images.unsplash.com/photo-1600891963283-a4422e11e03c?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"},
-    {"שם": "שקשוקה", "חובה": ["ביצים", "עגבניות", "בצל", "שום"], "image": "https://images.unsplash.com/photo-1616439567950-c8e54e4c29d6?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"},
-    {"שם": "מוס שוקולד", "חובה": ["שוקולד מריר", "שמנת מתוקה"], "image": "https://images.unsplash.com/photo-1629859591942-1e9d1a38c92a?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"}
+    {"שם": "פסטה בולונז", "חובה": ["פסטה", "בשר טחון", "בצל", "רסק עגבניות"], "calories": 650, "image": "https://images.unsplash.com/photo-1546545229-ef2797686523?w=500"},
+    {"שם": "סלמון בתנור", "חובה": ["פילה סלמון", "לימון", "שום", "שמן זית"], "calories": 450, "image": "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=500"},
+    {"שם": "שקשוקה ביתית", "חובה": ["ביצים", "עגבניות", "בצל", "שמן זית"], "calories": 350, "image": "https://images.unsplash.com/photo-1590412200988-a436bb715048?w=500"},
+    {"שם": "שניצל ופירה", "חובה": ["חזה עוף", "פירורי לחם", "ביצים", "תפוחי אדמה"], "calories": 720, "image": "https://images.unsplash.com/photo-1594759844614-3c2761b15ad3?w=500"},
+    {"שם": "אורז עם עוף וסילאן", "חובה": ["אורז", "חזה עוף", "סילאן", "בצל"], "calories": 580, "image": "https://images.unsplash.com/photo-1600891963283-a4422e11e03c?w=500"},
+    {"שם": "קציצות ברוטב", "חובה": ["בשר טחון", "בצל", "רסק עגבניות", "פירורי לחם"], "calories": 520, "image": "https://images.unsplash.com/photo-1529042410759-ad95287463ef?w=500"}
 ]
 
-# יצירת מילון מחירים שטוח
-price_dict = {item: price for cat in ingredients_market.values() for item, price in cat.items()}
+# ניהול State
+if 'weekly_plan' not in st.session_state: st.session_state.weekly_plan = []
 
-# --- 2. ניהול המצב (State) של האפליקציה ---
-if 'weekly_plan' not in st.session_state:
-    st.session_state.weekly_plan = []
+# --- ממשק משתמש ---
+st.title("👨‍🍳 עוזר המטבח החכם")
 
-# --- 3. פונקציות שיתוף לוואטסאפ ---
-def generate_whatsapp_link(text_message):
-    """יוצר לינק לוואטסאפ עם הודעה מוכנה."""
-    encoded_text = urllib.parse.quote(text_message)
-    return f"https://wa.me/?text={encoded_text}"
+tab1, tab2, tab3 = st.tabs(["🛒 מה יש לי?", "📖 ספר מתכונים", "🗓️ תפריט וערכים"])
 
-def generate_shopping_list_message(plan, pantry, prices_dict):
-    """מרכז את רשימת הקניות להודעת וואטסאפ."""
-    message_parts = ["רשימת קניות שבועית מ'שף המזווה':\n"]
+# --- טאב 1: מה יש לך במטבח? ---
+with tab1:
+    st.info("""
+    **איך זה עובד?** סמן כאן את כל המוצרים שיש לך כרגע בבית.  
+    האפליקציה תנתח את המלאי שלך ותציג בטאב הבא **רק** מתכונים שאתה יכול להכין כרגע, בלי שתצטרך ללכת לסופר!
+    """)
     
-    all_missing_items_raw = []
-    for r in plan:
-        missing = [item for item in r["חובה"] if item not in pantry]
-        all_missing_items_raw.extend(missing)
-    
-    unique_missing = sorted(list(set(all_missing_items_raw))) # מיון לקריאות טובה יותר
-    
-    total_cost = 0
-    if unique_missing:
-        message_parts.append("\n🛒 מצרכים שצריך לקנות:\n")
-        for m in unique_missing:
-            p = prices_dict.get(m, 0)
-            total_cost += p
-            message_parts.append(f"- {m} (~{p}₪)")
-        message_parts.append(f"\nסה\"כ עלות משוערת: {total_cost}₪")
-    else:
-        message_parts.append("✅ יש לך את כל המצרכים! 0₪ הוצאה.")
-    
-    message_parts.append("\nבתיאבון!")
-    return "\n".join(message_parts)
-
-# --- 4. ממשק משתמש ---
-st.title("📅 מתכנן ארוחות ושיתוף בוואטסאפ")
-
-col_pantry, col_recipes, col_summary = st.columns([1, 1.5, 1])
-
-# עמודה 1: המזווה שלי
-with col_pantry:
-    st.header("🛒 המזווה שלי")
     user_pantry = []
-    for cat, items in ingredients_market.items():
-        with st.expander(cat):
-            for item in items:
-                if st.checkbox(item, key=f"pantry_{item}"):
-                    user_pantry.append(item)
+    cols = st.columns(3)
+    for i, (cat, items) in enumerate(ingredients_db.items()):
+        with cols[i % 3]:
+            with st.expander(cat, expanded=True):
+                for item in items:
+                    if st.checkbox(item, key=f"pantry_{item}"):
+                        user_pantry.append(item)
     user_pantry_set = set(user_pantry)
 
-# עמודה 2: בחירת מנות לשבוע
-with col_recipes:
-    st.header("🍳 בחר מנות לתפריט")
-    for r in recipes:
-        missing = [i for i in r["חובה"] if i not in user_pantry_set]
-        cost = sum(price_dict.get(m, 0) for m in missing)
-        
-        with st.container(border=True): # מעטפת עם מסגרת לכל מתכון
-            st.image(r['image'], width=250, caption=r['שם'])
-            st.write(f"**{r['שם']}**")
-            if not missing:
-                st.caption("✅ יש לך הכל!")
-            else:
-                st.caption(f"❌ חסר: {', '.join(missing)} (עלות: {cost}₪)")
-            
-            c1_btn, c2_btn = st.columns(2)
-            if c1_btn.button("הוסף לתפריט", key=f"add_{r['שם']}", use_container_width=True):
-                st.session_state.weekly_plan.append(r)
-                st.toast(f"'{r['שם']}' נוספה לתפריט!")
-            
-            # כפתור שיתוף מנה בודדת
-            dish_share_msg = f"רעיון לארוחה מ'שף המזווה': *{r['שם']}*\n\n" \
-                             f"מצרכי חובה: {', '.join(r['חובה'])}.\n"
-            if missing:
-                dish_share_msg += f"חסרים לי: {', '.join(missing)}.\n"
-            dish_share_msg += f"תמונה: {r['image']}"
-            
-            c2_btn.link_button("שתף מנה ↗️", url=generate_whatsapp_link(dish_share_msg), use_container_width=True)
+# --- טאב 2: ספר מתכונים ---
+with tab2:
+    st.header("מנות שניתן להכין עכשיו")
+    
+    # סינון: רק מנות שיש להן את כל מצרכי החובה
+    available_recipes = [r for r in recipes if all(ing in user_pantry_set for ing in r["חובה"])]
+    
+    if not available_recipes:
+        st.warning("לא נמצאו מתכונים שמתאימים בדיוק למה שיש לך. נסה לסמן עוד מוצרים בטאב הראשון!")
+    else:
+        grid = st.columns(2)
+        for idx, r in enumerate(available_recipes):
+            with grid[idx % 2]:
+                with st.container(border=True):
+                    st.image(r['image'], use_container_width=True)
+                    st.subheader(r['שם'])
+                    st.write(f"**מצרכים:** {', '.join(r['חובה'])}")
+                    if st.button(f"הוסף לתפריט השבועי", key=f"add_{r['שם']}"):
+                        st.session_state.weekly_plan.append(r)
+                        st.toast(f"{r['שם']} נוסף!")
 
-# עמודה 3: סיכום ורשימת קניות
-with col_summary:
-    st.header("📝 סיכום שבועי")
+# --- טאב 3: תפריט וערכים ---
+with tab3:
+    st.header("התפריט שלך וערך קלורי")
+    
     if st.session_state.weekly_plan:
-        total_cost = 0
-        all_missing_items_raw = []
+        total_cal = 0
+        for r in st.session_state.weekly_plan:
+            with st.expander(f"🍴 {r['שם']} - {r['calories']} קלוריות"):
+                st.write("**פירוט קלורי לפי רכיב (ל-100 גרם/יח'):**")
+                for ing in r["חובה"]:
+                    cal = ingredients_db.get(cat, {}).get(ing, "לא ידוע")
+                    # חיפוש הערך הקלורי במאגר
+                    found_cal = 0
+                    for c_cat in ingredients_db:
+                        if ing in ingredients_db[c_cat]:
+                            found_cal = ingredients_db[c_cat][ing]
+                    st.write(f"- {ing}: {found_cal} קלוריות")
+                total_cal += r['calories']
         
-        st.write("**המנות שנבחרו:**")
-        for i, r in enumerate(st.session_state.weekly_plan):
-            st.write(f"{i+1}. {r['שם']}")
-            missing = [item for item in r["חובה"] if item not in user_pantry_set]
-            all_missing_items_raw.extend(missing)
+        st.divider()
+        st.metric("סה\"כ קלוריות לתפריט", f"{total_cal} קק\"ל")
         
         if st.button("נקה תפריט"):
             st.session_state.weekly_plan = []
-            st.rerun() # מרענן את העמוד כדי לעדכן את המצב
-            
-        st.divider()
-        
-        # רשימת קניות מרוכזת (בלי כפילויות)
-        unique_missing = sorted(list(set(all_missing_items_raw))) # מיון לקריאות טובה יותר
-        if unique_missing:
-            st.subheader("🛒 רשימת קניות מרוכזת:")
-            for m in unique_missing:
-                p = price_dict.get(m, 0)
-                total_cost += p
-                st.write(f"- {m} (~{p}₪)")
-            
-            st.metric("סה\"כ עלות משוערת", f"{total_cost} ₪")
-            
-            # כפתור שיתוף רשימת קניות בוואטסאפ
-            whatsapp_message = generate_shopping_list_message(st.session_state.weekly_plan, user_pantry_set, price_dict)
-            st.markdown(f'<a href="{generate_whatsapp_link(whatsapp_message)}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #25d366; color: white; text-align: center; text-decoration: none; border-radius: 5px; font-weight: bold;">שלח רשימת קניות בוואטסאפ ↗️</a>', unsafe_allow_html=True)
-            
-            # הסבר על יצירת קבוצה
-            st.caption("💡 כדי לשתף בקבוצה קיימת או ליצור חדשה: לחצו על הכפתור, בחרו איש קשר או קבוצה קיימת, ואז תוכלו להוסיף אנשים נוספים מתוך וואטסאפ.")
-
-        else:
-            st.success("✅ יש לך את כל המצרכים לכל המנות שבחרת! (0 ₪ הוצאה)")
+            st.rerun()
     else:
-        st.write("התפריט שלך ריק. הוסף מנות מהרשימה המרכזית.")
+        st.info("בחר מתכונים בטאב הקודם כדי לראות כאן סיכום.")
